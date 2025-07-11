@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>線上抽獎程式</title>
+    <style>
+        /* --- 頁面樣式 --- */
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
+
+        :root {
+            --bg-color: #2c3e50;
+            --text-color: #ecf0f1;
+            --primary-color: #3498db;
+            --winner-color: #f1c40f;
+            --winner-shadow: #e67e22;
+        }
+
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            text-align: center;
+        }
+
+        .container {
+            padding: 2rem 3rem;
+            background-color: rgba(0, 0, 0, 0.2);
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        p {
+            font-size: 1.1rem;
+            color: #bdc3c7;
+            margin-bottom: 2rem;
+        }
+        
+        /* --- 抽獎顯示區 --- */
+        .display {
+            font-size: 10rem;
+            font-weight: 900;
+            line-height: 1;
+            padding: 2rem;
+            margin: 1rem auto;
+            min-width: 200px;
+            background-color: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            transition: all 0.3s ease-in-out;
+        }
+        
+        /* --- 中獎號碼的特殊樣式 --- */
+        .display.winner {
+            color: var(--winner-color);
+            transform: scale(1.1);
+            text-shadow: 0 0 15px var(--winner-shadow);
+            animation: winner-pulse 1s infinite;
+        }
+
+        @keyframes winner-pulse {
+            0% { transform: scale(1.1); }
+            50% { transform: scale(1.15); }
+            100% { transform: scale(1.1); }
+        }
+
+        /* --- 抽獎按鈕 --- */
+        #start-btn {
+            font-family: 'Noto Sans TC', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            padding: 1rem 3rem;
+            border: none;
+            border-radius: 50px;
+            background-color: var(--primary-color);
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        #start-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        #start-btn:active {
+            transform: translateY(-1px);
+        }
+        
+        #start-btn:disabled {
+            background-color: #7f8c8d;
+            cursor: not-allowed;
+            transform: translateY(0);
+            box-shadow: none;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>幸運數字抽獎</h1>
+        <p>從 1 到 32 號中抽出一位幸運兒！</p>
+        <div id="draw-display" class="display">-</div>
+        <button id="start-btn">開始抽獎</button>
+    </div>
+
+    <script>
+        // --- 獲取頁面元素 ---
+        const display = document.getElementById('draw-display');
+        const startBtn = document.getElementById('start-btn');
+
+        // --- 抽獎設定 ---
+        const totalNumbers = 32;       // 總共的數字
+        const countdownTime = 3;       // 倒數計時秒數
+        const drawDuration = 4000;     // 抽獎動畫持續時間 (毫秒)
+        const initialInterval = 50;    // 數字跳動的初始間隔 (毫秒)
+
+        // --- 內建音效模組 ---
+        let audioCtx; // AudioContext 會在使用者首次互動後初始化
+
+        // 播放聲音的函式
+        function playSound(type, frequency, duration) {
+            if (!audioCtx) {
+                // 為避免瀏覽器政策限制，在使用者點擊後才建立 AudioContext
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            oscillator.type = type; // 'sine', 'square', 'sawtooth', 'triangle'
+            oscillator.frequency.value = frequency; // 頻率 (Hz)
+            
+            // 聲音淡入淡出，避免爆音
+            gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.5, audioCtx.currentTime + 0.01);
+            gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + duration / 1000);
+
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + duration / 1000);
+        }
+        
+        // --- 主要抽獎邏輯 ---
+        async function startDraw() {
+            // 1. 禁用按鈕，重置畫面
+            startBtn.disabled = true;
+            display.classList.remove('winner');
+            display.innerText = '-';
+
+            // 2. 倒數計時
+            for (let i = countdownTime; i > 0; i--) {
+                display.innerText = i;
+                playSound('sine', 440, 150); // 播放倒數音效
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+            
+            display.innerText = 'GO!';
+            playSound('sine', 880, 200); // 播放開始音效
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // 3. 預先選定中獎號碼
+            const winner = Math.floor(Math.random() * totalNumbers) + 1;
+            const startTime = Date.now();
+
+            // 4. 執行抽獎動畫 (遞迴函式)
+            function spin() {
+                const elapsedTime = Date.now() - startTime;
+                
+                // 如果動畫時間結束
+                if (elapsedTime >= drawDuration) {
+                    // 顯示最終中獎號碼
+                    display.innerText = winner;
+                    display.classList.add('winner');
+                    
+                    // 播放中獎慶祝音效 (三個音階)
+                    playSound('triangle', 523.25, 400); // C5
+                    setTimeout(() => playSound('triangle', 659.25, 400), 150); // E5
+                    setTimeout(() => playSound('triangle', 783.99, 500), 300); // G5
+                    
+                    // 重新啟用按鈕
+                    startBtn.disabled = false;
+                    return;
+                }
+
+                // 在動畫期間，隨機顯示數字
+                const randomNumber = Math.floor(Math.random() * totalNumbers) + 1;
+                display.innerText = randomNumber;
+                playSound('square', 300, 50); // 播放數字跳動音效
+
+                // 計算下一次跳動的延遲時間，製造減速效果
+                // 使用平方函數讓減速感更明顯
+                const progress = elapsedTime / drawDuration;
+                const currentDelay = initialInterval + (progress * progress * 400);
+                
+                setTimeout(spin, currentDelay);
+            }
+
+            // 啟動動畫
+            spin();
+        }
+
+        // --- 綁定按鈕事件 ---
+        startBtn.addEventListener('click', startDraw);
+
+    </script>
+</body>
+</html>sdf
